@@ -39,6 +39,25 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define LEFT 0
+#define RIGHT 1
+//Pinout:
+//#define LEFT_TIM TIM3
+//#define RIGHT_TIM TIM1
+#define SENSOR_DISTANCE_LEFT 0
+#define SENSOR_DISTANCE_RIGHT 3
+#define SENSOR_LINE_LEFT 2
+#define SENSOR_LINE_RIGHT 1
+//Limits
+#define PWM_MAX 3100
+//PD settings
+#define KP 0.5
+#define KD 0
+//Others
+#define NO_LINE_OF_SIGHT 4000
+#define PWM_BASE 3000 //Max 3100
+#define DETECT 1600
+//int PD=0;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,6 +73,7 @@ SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
@@ -73,6 +93,7 @@ static void MX_TIM1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -89,7 +110,6 @@ static void MX_USART2_UART_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -98,16 +118,12 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
-
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -119,6 +135,7 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
  // HAL_ADC_Start_DMA(&hadc1, ADC_readout, 6);
 
@@ -127,20 +144,16 @@ int main(void)
   HAL_GPIO_WritePin(ENABLE_A_GPIO_Port, ENABLE_A_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(ENABLE_B_GPIO_Port, ENABLE_B_Pin, GPIO_PIN_SET);
 
-  TIM1->CCR1 = 3100;
-  TIM1->CCR2 = 5;
-
-  TIM3->CCR1 = 3100;
-  TIM3->CCR2 = 5;
+  HAL_TIM_Base_Start_IT(&htim16);
 
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
 
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-
-  HAL_Delay(1000);
-  HAL_GPIO_WritePin(KILLSWITCH_GPIO_Port, KILLSWITCH_Pin, GPIO_PIN_RESET);
+  HAL_ADC_Start_DMA(&hadc1, ADC_readout, 6);
+  //HAL_Delay(1000);
+  //HAL_GPIO_WritePin(KILLSWITCH_GPIO_Port, KILLSWITCH_Pin, GPIO_PIN_RESET);
 
 
   /* USER CODE END 2 */
@@ -234,7 +247,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_7CYCLES_5;
+  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_39CYCLES_5;
   hadc1.Init.OversamplingMode = DISABLE;
   hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -466,6 +479,38 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM16_Init(void)
+{
+
+  /* USER CODE BEGIN TIM16_Init 0 */
+
+  /* USER CODE END TIM16_Init 0 */
+
+  /* USER CODE BEGIN TIM16_Init 1 */
+
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 99;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 999;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
+
+  /* USER CODE END TIM16_Init 2 */
+
+}
+
+/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -573,6 +618,8 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -613,9 +660,77 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+
+void setEngine(int PWM, int EngineId)
+{
+	if(PWM>=PWM_MAX)
+		PWM=PWM_MAX-1;
+	if(PWM<=-PWM_MAX)
+		PWM=-PWM_MAX+1;
+	switch(EngineId)
+	{
+	case LEFT:
+		if(PWM>0)
+		{
+			TIM3->CCR1 = 5;
+			TIM3->CCR2 = PWM;
+		}
+		else
+		{
+			TIM3->CCR1 = -PWM;
+			TIM3->CCR2 = 5;
+		}
+		break;
+	case RIGHT:
+		if(PWM>0)
+		{
+			TIM1->CCR1 = PWM;
+			TIM1->CCR2 = 5;
+		}
+		else
+		{
+			TIM1->CCR1 = 5;
+			TIM1->CCR2 = -PWM;
+		}
+		break;
+	}
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim16)
+{
+	static int error=0, prev_error=0;
+	static short direction = 0;
+	static int PD = 0;
+	prev_error = error;
+	if(ADC_readout[SENSOR_DISTANCE_LEFT] < DETECT && ADC_readout[SENSOR_DISTANCE_RIGHT] < DETECT)
+	{
+		if(direction == 1)
+		{
+			error = NO_LINE_OF_SIGHT;
+		}
+		else
+			error = -NO_LINE_OF_SIGHT;
+	}
+	else
+	error = ADC_readout[SENSOR_DISTANCE_LEFT] - ADC_readout[SENSOR_DISTANCE_RIGHT];
+	if(error < 0)
+	{
+		direction = 0;
+	}
+	else
+	{
+		direction = 1;
+	}
+
+	PD=KP*error+KD*(error-prev_error);
+	setEngine(PWM_BASE+PD, RIGHT);
+	setEngine(PWM_BASE-PD, LEFT);
+}
 
 /* USER CODE END 4 */
 
